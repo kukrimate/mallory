@@ -164,6 +164,8 @@ lib/lib.a: | $(TOPDIR)/lib/Makefile $(wildcard $(TOPDIR)/include/*.[ch])
 
 buildid : $(TOPDIR)/buildid.c
 	$(CC) -Og -g3 -Wall -Werror -Wextra -o $@ $< -lelf
+hash : $(TOPDIR)/hash.c
+	$(CC) $(EFI_INCLUDES) -std=gnu11 -Og -g3 -Wall -Werror -Wextra $(shell pkgconf --cflags --libs openssl) -o $@ $<
 
 $(BOOTCSVNAME) :
 	@echo Making $@
