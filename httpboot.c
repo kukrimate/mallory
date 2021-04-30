@@ -73,6 +73,9 @@ find_httpboot (EFI_HANDLE device)
 	BOOLEAN ip_found = FALSE;
 	BOOLEAN ret = FALSE;
 
+	if (!device)
+		return ret;
+
 	if (uri) {
 		FreePool(uri);
 		uri = NULL;
