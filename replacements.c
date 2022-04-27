@@ -33,6 +33,11 @@ get_active_systab(void)
 static typeof(systab->BootServices->LoadImage) system_load_image;
 static typeof(systab->BootServices->StartImage) system_start_image;
 static typeof(systab->BootServices->Exit) system_exit;
+#if defined(SIMULATE_ENABLED_STATE)
+static typeof(systab->RuntimeServices->GetVariable) system_get_variable;
+static typeof(systab->RuntimeServices->GetNextVariableName) system_get_next_variable_name;
+static typeof(systab->RuntimeServices->SetVariable) system_set_variable;
+#endif
 #if !defined(DISABLE_EBS_PROTECTION)
 static typeof(systab->BootServices->ExitBootServices) system_exit_boot_services;
 #endif /* !defined(DISABLE_EBS_PROTECTION) */
@@ -45,12 +50,32 @@ unhook_system_services(void)
 	if (!systab)
 		return;
 
+	unhook_variable_services();
+
 	systab->BootServices->LoadImage = system_load_image;
 	systab->BootServices->StartImage = system_start_image;
+#if defined(SIMULATE_ENABLED_STATE)
+	systab->RuntimeServices->GetVariable = system_get_variable;
+	systab->RuntimeServices->SetVariable = system_set_variable;
+	systab->RuntimeServices->GetNextVariableName = system_get_next_variable_name;
+#endif
 #if !defined(DISABLE_EBS_PROTECTION)
 	systab->BootServices->ExitBootServices = system_exit_boot_services;
 #endif /* !defined(DISABLE_EBS_PROTECTION) */
 	BS = systab->BootServices;
+}
+
+void
+unhook_variable_services(void)
+{
+	if (!systab)
+		return;
+
+#if defined(SIMULATE_ENABLED_STATE)
+	systab->RuntimeServices->GetVariable = system_get_variable;
+	systab->RuntimeServices->SetVariable = system_set_variable;
+	systab->RuntimeServices->GetNextVariableName = system_get_next_variable_name;
+#endif
 }
 
 static EFI_STATUS EFIAPI
@@ -76,6 +101,7 @@ replacement_start_image(EFI_HANDLE image_handle, UINTN *exit_data_size, CHAR16 *
 {
 	EFI_STATUS efi_status;
 	unhook_system_services();
+	unhook_variable_services();
 
 	if (image_handle == last_loaded_image) {
 		loader_is_participating = 1;
@@ -97,10 +123,146 @@ replacement_start_image(EFI_HANDLE image_handle, UINTN *exit_data_size, CHAR16 *
 			}
 		}
 		hook_system_services(systab);
+		hook_variable_services(systab);
 		loader_is_participating = 0;
 	}
 	return efi_status;
 }
+
+#if defined(SIMULATE_ENABLED_STATE)
+extern uint8_t simulated_pk[];
+extern uint8_t simulated_kek[];
+extern uint8_t simulated_db[];
+extern uint8_t simulated_dbx[];
+extern uint8_t simulated_setupmode[];
+extern uint8_t simulated_secureboot[];
+
+extern const uint32_t simulated_pk_size;
+extern const uint32_t simulated_kek_size;
+extern const uint32_t simulated_db_size;
+extern const uint32_t simulated_dbx_size;
+extern const uint32_t simulated_setupmode_size;
+extern const uint32_t simulated_secureboot_size;
+
+static const struct simulation {
+	const CHAR16 name[32];
+	EFI_GUID *guid;
+	const uint8_t *data;
+	const uint32_t *data_size;
+	const uint32_t attrs;
+	const EFI_STATUS set_variable_rc;
+} simulations[] = {
+	{ L"PK", &GV_GUID, simulated_pk, &simulated_pk_size, UEFI_VAR_NV_BS_RT, },
+	{ L"KEK", &GV_GUID, simulated_kek, &simulated_kek_size, UEFI_VAR_NV_BS_RT, },
+	{ L"SetupMode", &GV_GUID, simulated_setupmode, &simulated_setupmode_size, UEFI_VAR_NV_BS_RT, },
+	{ L"SecureBoot", &GV_GUID, simulated_secureboot, &simulated_secureboot_size, UEFI_VAR_NV_BS_RT, },
+	{ L"db", &SIG_DB, simulated_db, &simulated_db_size, UEFI_VAR_NV_BS_RT, },
+	{ L"dbx", &SIG_DB, simulated_dbx, &simulated_dbx_size, UEFI_VAR_NV_BS_RT, },
+	{ L"", NULL, NULL, 0, 0, }
+};
+
+static EFI_STATUS EFIAPI
+replacement_get_variable(CHAR16 *variable_name, EFI_GUID *vendor_guid,
+                         UINT32 *attributes, UINTN *data_size, VOID *data)
+{
+	unsigned int i;
+
+	if (!variable_name || !vendor_guid || !data_size)
+		return EFI_INVALID_PARAMETER;
+
+	for (i = 0; simulations[i].name[0] != L'\0'; i++) {
+		if (!StrCmp(simulations[i].name, variable_name) &&
+		    !CompareGuid(simulations[i].guid, vendor_guid))
+		{
+			if (*data_size < *simulations[i].data_size) {
+				*data_size = *simulations[i].data_size;
+				return EFI_BUFFER_TOO_SMALL;
+			}
+			if (!data)
+				return EFI_INVALID_PARAMETER;
+
+			*data_size = *simulations[i].data_size;
+			CopyMem(data, (void *)simulations[i].data, *data_size);
+			if (attributes)
+				*attributes = simulations[i].attrs;
+			return EFI_SUCCESS;
+		}
+	}
+
+	return system_get_variable(variable_name, vendor_guid, attributes,
+	                           data_size, data);
+}
+
+static EFI_STATUS
+update_gnvn(UINTN *name_size_out, CHAR16 *name_out, EFI_GUID *vendor_guid_out,
+	    const CHAR16 * const name, const EFI_GUID * const vendor_guid)
+{
+	size_t namesz;
+
+	namesz = StrSize(name);
+	if (*name_size_out < namesz) {
+		*name_size_out = namesz;
+		return EFI_BUFFER_TOO_SMALL;
+	}
+
+	*name_size_out = namesz;
+	CopyMem(name_out, (CHAR16 *)name, namesz);
+	CopyMem(vendor_guid_out, (EFI_GUID *)vendor_guid, sizeof(EFI_GUID));
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI
+replacement_get_next_variable_name(UINTN *variable_name_size,
+                                   CHAR16 *variable_name, EFI_GUID *vendor_guid)
+{
+	unsigned int i;
+	bool found = false;
+
+	if (!variable_name_size || !variable_name || !vendor_guid)
+		return EFI_INVALID_PARAMETER;
+
+	if (!*variable_name_size)
+		return update_gnvn(variable_name_size, variable_name,
+		                   vendor_guid, simulations[0].name,
+		                   simulations[0].guid);
+
+	for (i = 0; simulations[i].name[0] != L'\0'; i++) {
+		if (found)
+			return update_gnvn(variable_name_size, variable_name,
+			                   vendor_guid, simulations[i].name,
+			                   simulations[i].guid);
+		if (!StrCmp(variable_name, simulations[i].name) &&
+		    !CompareGuid(vendor_guid, simulations[i].guid))
+		{
+			found = true;
+			continue;
+		}
+	}
+
+	return system_get_next_variable_name(variable_name_size, variable_name,
+	                                     vendor_guid);
+}
+
+static EFI_STATUS EFIAPI
+replacement_set_variable(CHAR16 *variable_name, EFI_GUID *vendor_guid,
+                         UINT32 attributes, UINTN data_size, VOID *data)
+{
+	unsigned int i;
+
+	if (!variable_name || !vendor_guid || !attributes || !data_size ||
+	    !data)
+		return EFI_INVALID_PARAMETER;
+
+	for (i = 0; simulations[i].name[0] != L'\0'; i++) {
+		if (!StrCmp(variable_name, simulations[i].name) &&
+		    !CompareGuid(vendor_guid, simulations[i].guid))
+			return simulations[i].set_variable_rc;
+	}
+
+	return system_set_variable(variable_name, vendor_guid, attributes,
+	                           data_size, data);
+}
+#endif
 
 #if !defined(DISABLE_EBS_PROTECTION)
 static EFI_STATUS EFIAPI
@@ -149,6 +311,24 @@ do_exit(EFI_HANDLE ImageHandle, EFI_STATUS ExitStatus,
 		}
 	}
 	return efi_status;
+}
+
+void
+hook_variable_services(EFI_SYSTEM_TABLE *local_systab)
+{
+#if defined(SIMULATE_ENABLED_STATE)
+	if (!systab)
+		systab = local_systab;
+	BS = systab->BootServices;
+	RT = systab->RuntimeServices;
+
+	system_get_variable = systab->RuntimeServices->GetVariable;
+	system_set_variable = systab->RuntimeServices->SetVariable;
+	system_get_next_variable_name = systab->RuntimeServices->GetNextVariableName;
+	systab->RuntimeServices->GetVariable = replacement_get_variable;
+	systab->RuntimeServices->GetNextVariableName = replacement_get_next_variable_name;
+	systab->RuntimeServices->SetVariable = replacement_set_variable;
+#endif
 }
 
 void

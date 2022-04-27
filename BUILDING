@@ -77,6 +77,10 @@ Variables you could set to customize the build:
 - OSLABEL
   This is the label that will be put in BOOT$(EFI_ARCH).CSV for your OS.
   By default this is the same value as EFIDIR .
+- SIMULATE_ENABLED_STATE
+  If this is set, shim will act as though Secure Boot is enabled, whether
+  the system variables actually reflect that or not.
+  This should never be enabled on a "production" build.
 
 Vendor SBAT data:
 It will sometimes be requested by reviewers that a build includes extra

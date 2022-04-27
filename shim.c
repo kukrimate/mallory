@@ -1424,6 +1424,8 @@ shim_fini(void)
 	 */
 	uninstall_shim_protocols();
 
+	unhook_variable_services();
+
 	if (secure_mode()) {
 
 		/*
@@ -1578,6 +1580,8 @@ efi_main (EFI_HANDLE passed_image_handle, EFI_SYSTEM_TABLE *passed_systab)
 	       vendor_authorized, vendor_authorized_size);
 	dprint(L"vendor_deauthorized:0x%08lx vendor_deauthorized_size:%lu\n",
 	       vendor_deauthorized, vendor_deauthorized_size);
+
+	hook_variable_services(systab);
 
 	/*
 	 * if SHIM_DEBUG is set, wait for a debugger to attach.

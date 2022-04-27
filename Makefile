@@ -53,6 +53,18 @@ else
 	UNAME=buildhost
 endif
 
+ifneq ($(origin SIMULATE_ENABLED_STATE),undefined)
+CFLAGS += -DSIMULATE_ENABLED_STATE \
+	  '-DSIMULATED_PK="$(TOPDIR)/data/PK-8be4df61-93ca-11d2-aa0d-00e098032b8c"' \
+	  '-DSIMULATED_KEK="$(TOPDIR)/data/KEK-8be4df61-93ca-11d2-aa0d-00e098032b8c"' \
+	  '-DSIMULATED_SECUREBOOT="$(TOPDIR)/data/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c"' \
+	  '-DSIMULATED_SETUPMODE="$(TOPDIR)/data/SetupMode-8be4df61-93ca-11d2-aa0d-00e098032b8c"' \
+	  '-DSIMULATED_DB="$(TOPDIR)/data/db-d719b2cb-3d3a-4596-a3bc-dad00e67656f"' \
+	  '-DSIMULATED_DBX="$(TOPDIR)/data/dbx-d719b2cb-3d3a-4596-a3bc-dad00e67656f"'
+OBJS += simulation.o
+ORIG_SOURCES += simulation.S
+endif
+
 SOURCES = $(foreach source,$(ORIG_SOURCES),$(TOPDIR)/$(source)) version.c
 MOK_SOURCES = $(foreach source,$(ORIG_MOK_SOURCES),$(TOPDIR)/$(source))
 FALLBACK_SRCS = $(foreach source,$(ORIG_FALLBACK_SRCS),$(TOPDIR)/$(source))
