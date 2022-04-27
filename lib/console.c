@@ -699,9 +699,15 @@ setup_verbosity(VOID)
 	EFI_STATUS efi_status;
 	UINT8 *verbose_check_ptr = NULL;
 	UINTN verbose_check_size;
+	const CHAR16 * const verbose_var_name =
+#ifdef ENABLE_SHIM_DEVEL
+		L"SHIM_DEVEL_VERBOSE";
+#else
+		L"SHIM_VERBOSE";
+#endif
 
 	verbose_check_size = sizeof(verbose);
-	efi_status = get_variable(L"SHIM_VERBOSE", &verbose_check_ptr,
+	efi_status = get_variable(verbose_var_name, &verbose_check_ptr,
 				  &verbose_check_size, SHIM_LOCK_GUID);
 	if (!EFI_ERROR(efi_status)) {
 		verbose = *(__typeof__(verbose) *)verbose_check_ptr;
