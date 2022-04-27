@@ -27,4 +27,7 @@ extern void unhook_exit(void);
 extern EFI_STATUS install_shim_protocols(void);
 extern void uninstall_shim_protocols(void);
 
+void hook_variable_services(EFI_SYSTEM_TABLE *local_systab);
+void unhook_variable_services(void);
+
 #endif /* SHIM_REPLACEMENTS_H */

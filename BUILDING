@@ -37,6 +37,10 @@ Variables you could set to customize the build:
   debugger only on the development branch and not the OS you need to boot
   to scp in a new development build.  Likewise, we look for
   SHIM_DEVEL_VERBOSE rather than SHIM_VERBOSE.
+- SIMULATE_ENABLED_STATE
+  If this is set, shim will act as though Secure Boot is enabled, whether
+  the system variables actually reflect that or not.
+  This should never be enabled on a "production" build.
 - DISABLE_EBS_PROTECTION
   On systems where a second stage bootloader is not used, and the Linux
   Kernel is embedded in the same EFI image as shim and booted directly
