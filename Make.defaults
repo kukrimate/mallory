@@ -155,6 +155,18 @@ ifneq ($(origin DISABLE_REMOVABLE_LOAD_OPTIONS), undefined)
 	DEFINES  += -DDISABLE_REMOVABLE_LOAD_OPTIONS
 endif
 
+ifneq ($(origin SHIM_INITRD_FILE),undefined)
+ifeq ($(origin SHIM_KERNEL_FILE),undefined)
+	$(error SHIM_INITRD_FILE requires SHIM_KERNEL_FILE)
+endif
+endif
+
+ifneq ($(origin SHIM_KERNEL_FILE),undefined)
+ifeq ($(origin SHIM_INITRD_FILE),undefined)
+	$(error SHIM_KERNEL_FILE requires SHIM_INITRD_FILE)
+endif
+endif
+
 LIB_GCC		= $(shell $(CC) $(ARCH_CFLAGS) -print-libgcc-file-name)
 EFI_LIBS	= -lefi -lgnuefi --start-group Cryptlib/libcryptlib.a Cryptlib/OpenSSL/libopenssl.a --end-group $(LIB_GCC)
 FORMAT		?= --target efi-app-$(ARCH)
@@ -185,6 +197,14 @@ DEFINES		+= -DVENDOR_CERT_FILE=\"$(VENDOR_CERT_FILE)\"
 endif
 ifneq ($(origin VENDOR_DBX_FILE), undefined)
 DEFINES		+= -DVENDOR_DBX_FILE=\"$(VENDOR_DBX_FILE)\"
+endif
+
+ifneq ($(origin SHIM_KERNEL_FILE),undefined)
+DEFINES		+= -DSHIM_KERNEL_FILE=\"$(SHIM_KERNEL_FILE)\" -DENABLE_PACKED_KERNEL
+endif
+
+ifneq ($(origin SHIM_INITRD_FILE),undefined)
+DEFINES		+= -DSHIM_INITRD_FILE=\"$(SHIM_KERNEL_FILE)\"
 endif
 
 LDFLAGS		= --hash-style=sysv -nostdlib -znocombreloc -T $(EFI_LDS) -shared -Bsymbolic -L$(LOCAL_EFI_PATH) -L$(LIBDIR) -LCryptlib -LCryptlib/OpenSSL $(EFI_CRT_OBJS) --build-id=sha1 $(ARCH_LDFLAGS) --no-undefined

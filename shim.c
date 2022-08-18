@@ -1324,6 +1324,11 @@ install_shim_protocols(void)
 	SHIM_LOCK *shim_lock;
 	EFI_STATUS efi_status;
 
+#if defined(ENABLE_PACKED_KERNEL)
+	efi_status = register_load_initrd();
+	return efi_status;
+#endif
+
 	/*
 	 * Did another instance of shim earlier already install the
 	 * protocol? If so, get rid of it.
@@ -1374,6 +1379,11 @@ install_shim_protocols(void)
 void
 uninstall_shim_protocols(void)
 {
+#if defined(ENABLE_PACKED_KERNEL)
+	unregister_load_initrd();
+	return;
+#endif
+
 	/*
 	 * If we're back here then clean everything up before exiting
 	 */
